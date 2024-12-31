@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  pageloademonitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pageloademonitor
+    ports:
+      - 5000:80
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.role == worker
+    networks:
+      - pageloademonitor_network
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token $TUNNEL_TOKEN
+    networks:
+      - pageloademonitor_network
+    deploy:
+      mode: replicated
+      replicas: 1
+
+networks:
+  pageloademonitor_network:
+    driver: overlay
+    driver_opts:
+      com.docker.network.driver.mtu: 1280
+    attachable: true
