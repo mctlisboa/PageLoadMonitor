@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Load Time Dashboard</title>
+
+  <!-- Bootstrap CSS (optional for styling) -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+  />
+</head>
+<body class="bg-light">
+
+<div class="container my-4">
+  <h1>Site Monitoring Dashboard</h1>
+
+  <p>
+    <strong>Measurement Interval:</strong> {{ measure_interval }} minutes<br>
+    <strong>Timezone:</strong> {{ timezone }}<br>
+    All times are in <strong>milliseconds</strong>.
+  </p>
+
+  <!-- Form to set the measurement interval -->
+  <form method="POST" action="/set_interval" class="row g-3 mb-4">
+    <div class="col-auto">
+      <label for="interval" class="col-form-label fw-bold">
+        Measurement Frequency (min):
+      </label>
+    </div>
+    <div class="col-auto">
+      <input
+        type="number"
+        name="interval"
+        id="interval"
+        class="form-control"
+        value="{{ measure_interval }}"
+        min="1"
+        required
+      />
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-secondary">
+        Update Frequency
+      </button>
+    </div>
+  </form>
+
+  <!-- Form to add a new site -->
+  <form method="POST" action="/add_site" class="row g-3 mb-4">
+    <div class="col-auto">
+      <label for="site_url" class="col-form-label fw-bold">
+        Add Site:
+      </label>
+    </div>
+    <div class="col-auto">
+      <input
+        type="url"
+        name="site_url"
+        id="site_url"
+        class="form-control"
+        placeholder="https://mysite.com"
+        required
+      />
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-success">
+        Add Site
+      </button>
+    </div>
+  </form>
+
+  <!-- Loop over sites, display each site in a card -->
+  {% for site in sites %}
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>{{ site }}</strong>
+        <a
+          href="/remove_site/{{ site }}"
+          class="btn btn-danger btn-sm"
+          onclick="return confirm('Remove this site?');"
+        >
+          Remove
+        </a>
+      </div>
+      <div class="card-body">
+        <!-- Display last 24h block stats (lowest/highest) -->
+        <p>
+          <strong>Last 24h (15-min blocks):</strong><br>
+          Lowest load time block: {{ block_stats[site].lowest }}<br>
+          Highest load time block: {{ block_stats[site].highest }}
+        </p>
+
+        <!-- Chart area -->
+        <canvas id="chart_{{ loop.index }}" style="max-height: 300px;"></canvas>
+      </div>
+    </div>
+  {% endfor %}
+
+  <div class="mt-3">
+    <a href="/download_csv" class="btn btn-primary">Download CSV</a>
+  </div>
+</div>
+
+<!-- Chart.js + Moment.js + Adapter -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.29.3/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  {% for site in sites %}
+    let chartInstance{{ loop.index }} = null;
+
+    async function fetchChartData() {
+      try {
+        // e.g. /chart_data/<site>
+        const url = '/chart_data/' + encodeURIComponent('{{ site }}');
+        const response = await fetch(url);
+        const data = await response.json();
+
+        // Build or update the chart
+        const ctx = document.getElementById('chart_{{ loop.index }}').getContext('2d');
+        if (!chartInstance{{ loop.index }}) {
+          chartInstance{{ loop.index }} = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: data.labels,  // Timestamps
+              datasets: [
+                {
+                  label: 'Connection (ms)',
+                  data: data.connection,
+                  borderColor: 'blue',
+                  tension: 0.2
+                },
+                {
+                  label: 'Latency (ms)',
+                  data: data.latency,
+                  borderColor: 'green',
+                  tension: 0.2
+                },
+                {
+                  label: 'Response (ms)',
+                  data: data.response,
+                  borderColor: 'red',
+                  tension: 0.2
+                },
+                {
+                  label: 'Page Load (ms)',
+                  data: data.page_load,
+                  borderColor: 'orange',
+                  tension: 0.2
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              scales: {
+                x: {
+                  type: 'time',
+                  time: {
+                    unit: 'minute'
+                  }
+                },
+                y: {
+                  beginAtZero: true,
+                  title: {
+                    display: true,
+                    text: 'Milliseconds'
+                  }
+                }
+              }
+            }
+          });
+        } else {
+          // Update existing chart data
+          chartInstance{{ loop.index }}.data.labels = data.labels;
+          chartInstance{{ loop.index }}.data.datasets[0].data = data.connection;
+          chartInstance{{ loop.index }}.data.datasets[1].data = data.latency;
+          chartInstance{{ loop.index }}.data.datasets[2].data = data.response;
+          chartInstance{{ loop.index }}.data.datasets[3].data = data.page_load;
+          chartInstance{{ loop.index }}.update();
+        }
+      } catch (err) {
+        console.error('Error fetching chart data for {{ site }}:', err);
+      }
+    }
+
+    // Initial fetch on page load
+    fetchChartData();
+
+    // Optionally, poll every X minutes to auto-refresh
+    // setInterval(fetchChartData, {{ measure_interval }} * 60 * 1000);
+  {% endfor %}
+});
+</script>
+</body>
+</html>

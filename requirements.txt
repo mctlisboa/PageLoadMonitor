@@ -1,0 +1,8 @@
+Flask==2.2.5
+schedule==1.2.0
+requests==2.31.0
+numpy==1.23.5
+pycurl==7.45.2
+pandas==1.5.3
+matplotlib==3.7.2  # still used in case you want to generate PNG fallback
+python-dotenv==1.0.0
